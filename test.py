@@ -37,18 +37,18 @@ class MapArtGenerator:
             return None
 
     def add_compass_to_content(self, svg, compass_svg, border_width, total_width, total_height):
-        """Add scaled compass in top-right with good padding"""
+        """Add scaled compass in top-right with good padding - DOUBLED SIZE"""
         if compass_svg is None:
             return
             
-        compass_size = int(border_width * 0.8)
-        padding = 20  # Good padding from edges
+        compass_size = int(border_width * 2.6)  # Doubled from 0.8 to 1.6
+        padding = 26  # Good padding from edges
         
         # Position in top-right with proper padding
         compass_x = total_width - border_width - compass_size - padding
         compass_y = border_width + padding
         
-        print(f"  Adding compass: {compass_size}×{compass_size}px at ({compass_x}, {compass_y}) with {padding}px padding")
+        print(f"  Adding compass: {compass_size}×{compass_size}px at ({compass_x}, {compass_y}) [DOUBLED SIZE]")
         
         compass_group = SubElement(svg, 'g')
         compass_group.set('transform', f'translate({compass_x}, {compass_y}) scale({compass_size/1440})')
@@ -141,7 +141,7 @@ class MapArtGenerator:
         return {'elements': []}
 
     def create_svg_panel(self, location_name, compass_svg, width=600, height=1350, border_width=50, variation=0, meters_per_pixel=8):
-        """Generate clean SVG panel with just compass"""
+        """Generate clean SVG panel with doubled compass size"""
         if location_name not in self.locations:
             print(f"  Warning: Location {location_name} not found")
             return None
@@ -263,13 +263,13 @@ class MapArtGenerator:
         
         print(f"  Added {road_count} roads and {contour_count} genuine contours only")
         
-        # Add compass with good padding - no other border elements
+        # Add DOUBLED compass with good padding
         self.add_compass_to_content(svg, compass_svg, border_width, total_width, total_height)
         
         return svg
 
     def generate_panels(self, count=12, width=600, height=1350, border_width=50, meters_per_pixel=8):
-        """Generate clean door-shaped panels"""
+        """Generate clean door-shaped panels with large compass"""
         panels = []
         locations = list(self.locations.keys())
         
@@ -283,9 +283,9 @@ class MapArtGenerator:
         total_width = width + (2 * border_width)
         total_height = height + (2 * border_width)
         
-        print(f"\nGenerating {count} clean door panels...")
+        print(f"\nGenerating {count} clean door panels with LARGE compass...")
         print(f"🚪 Size: {total_width}×{total_height}px")
-        print(f"🧭 Compass with good padding, no border complications")
+        print(f"🧭 Compass: {int(border_width * 1.6)}×{int(border_width * 1.6)}px (DOUBLED SIZE)")
         print(f"📍 Locations: {', '.join([loc.replace('_', ' ').title() for loc in locations])}")
         print("-" * 60)
         
@@ -302,18 +302,18 @@ class MapArtGenerator:
                     'variation': variation,
                     'svg': svg
                 })
-                print("  ✓ Clean panel generated")
+                print("  ✓ Panel with large compass generated")
             else:
                 print("  ✗ Failed to generate panel")
             print()
         
         return panels
 
-    def save_panels(self, panels, output_dir="door_panels_clean"):
+    def save_panels(self, panels, output_dir="door_panels_large_compass"):
         """Save clean SVG panels to files"""
         os.makedirs(output_dir, exist_ok=True)
         
-        print(f"Saving clean door panels to '{output_dir}' directory...")
+        print(f"Saving door panels with large compass to '{output_dir}' directory...")
         print("-" * 60)
         
         for i, panel in enumerate(panels):
@@ -329,16 +329,16 @@ class MapArtGenerator:
             
             print(f"✓ Saved: {filename}")
         
-        print(f"\n🎉 All {len(panels)} clean panels saved successfully!")
+        print(f"\n🎉 All {len(panels)} panels with large compass saved!")
         print(f"📁 Location: {os.path.abspath(output_dir)}")
 
 def main():
     """Main function"""
     print("=" * 70)
-    print("🚗 SELF-DRIVING CAR LAB - CLEAN DOOR PANELS")
+    print("🚗 SELF-DRIVING CAR LAB - LARGE COMPASS DOOR PANELS")
     print("=" * 70)
-    print("✨ Clean design: No border color, no synthetic contours, no weird rectangles")
-    print("🧭 Just compass with good padding and genuine map data")
+    print("🧭 Compass size DOUBLED (100% increase)")
+    print("✨ Clean design with only genuine map data")
     print(f"Colors: Roads(#FFB81C) | Background(#071B2C) | Contours(#FFFFFF)")
     print()
     
@@ -356,10 +356,9 @@ def main():
         if panels:
             generator.save_panels(panels)
             print(f"\n📋 SUMMARY:")
-            print(f"   🚪 Clean door panels: {len(panels)}")
-            print(f"   ✨ No border complications - single background color")
-            print(f"   🗺️  Only genuine contours from real map data")
-            print(f"   🧭 Compass with proper padding")
+            print(f"   🚪 Door panels: {len(panels)}")
+            print(f"   🧭 Compass: 80×80px (doubled from 40×40px)")
+            print(f"   ✨ Clean design with proper padding")
             print(f"   ✅ Ready for vinyl printing!")
         else:
             print("❌ No panels generated")
