@@ -3,7 +3,7 @@ import json
 import random
 import math
 import os
-from xml.etree.ElementTree import Element, SubElement, tostring
+from xml.etree.ElementTree import Element, SubElement, tostring, parse
 from xml.dom import minidom
 
 class MapArtGenerator:
@@ -26,6 +26,42 @@ class MapArtGenerator:
             'govan_mbeki': (-33.9234, 25.5456),
             'walmer': (-33.9456, 25.5678)
         }
+
+    def load_compass_svg(self, compass_file_path="cpm-lab-nmu.svg"):
+        """Load the compass SVG file"""
+        try:
+            if os.path.exists(compass_file_path):
+                tree = parse(compass_file_path)
+                return tree.getroot()
+            else:
+                print(f"  Warning: Compass file '{compass_file_path}' not found")
+                return None
+        except Exception as e:
+            print(f"  Warning: Could not load compass SVG: {e}")
+            return None
+
+    def add_compass_to_content(self, svg, compass_svg, border_width, total_width, total_height):
+        """Add scaled compass INSIDE the content area, top-right corner"""
+        if compass_svg is None:
+            return
+            
+        # Calculate compass size - fit nicely with margin
+        compass_size = int(border_width * 0.8)  # 80% of border width
+        margin = 10  # Margin from edge of content area
+        
+        # Position INSIDE the content area, top-right corner
+        compass_x = total_width - border_width - compass_size - margin
+        compass_y = border_width + margin
+        
+        print(f"  Adding compass: {compass_size}×{compass_size}px at ({compass_x}, {compass_y}) [INSIDE content area, top-right]")
+        
+        # Create a group for the compass with transform
+        compass_group = SubElement(svg, 'g')
+        compass_group.set('transform', f'translate({compass_x}, {compass_y}) scale({compass_size/1440})')
+        
+        # Copy all elements from compass SVG into the group
+        for child in compass_svg:
+            compass_group.append(child)
 
     def calculate_bounds_from_scale(self, center_lat, center_lon, width_px, height_px, meters_per_pixel=8):
         """Calculate geographic bounds based on image dimensions and scale"""
@@ -214,52 +250,46 @@ class MapArtGenerator:
         
         return contours
 
-    def add_border_design(self, svg, total_width, total_height, border_width):
-        """Add subtle design elements to the border area - optimized for door format"""
+    def add_border_design(self, svg, total_width, total_height, border_width, compass_svg):
+        """Add subtle design elements to the border area and compass to content area"""
         if border_width < 20:
             return
+        
+        # Add compass INSIDE the content area, top-right
+        self.add_compass_to_content(svg, compass_svg, border_width, total_width, total_height)
             
-        # Add corner registration marks
-        mark_size = min(border_width // 2, 12)
+        # Add corner registration marks in border area
+        mark_size = min(border_width // 3, 10)
         mark_offset = border_width // 4
         
-        # Top corners (more important for door orientation)
-        for side in [0, 1]:  # Left and right
-            x_pos = mark_offset if side == 0 else total_width - mark_offset
-            
+        # All corner registration marks
+        corners = [
+            (mark_offset, mark_offset),  # Top-left
+            (total_width - mark_offset, mark_offset),  # Top-right
+            (mark_offset, total_height - mark_offset),  # Bottom-left
+            (total_width - mark_offset, total_height - mark_offset)  # Bottom-right
+        ]
+        
+        for x_pos, y_pos in corners:
             # Vertical mark
             line1 = SubElement(svg, 'line')
             line1.set('x1', str(x_pos))
-            line1.set('y1', str(mark_offset - mark_size))
+            line1.set('y1', str(y_pos - mark_size))
             line1.set('x2', str(x_pos))
-            line1.set('y2', str(mark_offset + mark_size))
+            line1.set('y2', str(y_pos + mark_size))
             line1.set('stroke', self.colors['roads'])
             line1.set('stroke-width', '1')
-            line1.set('opacity', '0.5')
+            line1.set('opacity', '0.4')
             
             # Horizontal mark
             line2 = SubElement(svg, 'line')
             line2.set('x1', str(x_pos - mark_size))
-            line2.set('y1', str(mark_offset))
+            line2.set('y1', str(y_pos))
             line2.set('x2', str(x_pos + mark_size))
-            line2.set('y2', str(mark_offset))
+            line2.set('y2', str(y_pos))
             line2.set('stroke', self.colors['roads'])
             line2.set('stroke-width', '1')
-            line2.set('opacity', '0.5')
-        
-        # Add a subtle "NORTH ↑" indicator at the top
-        if border_width >= 40:
-            # Small north arrow near top center
-            center_x = total_width // 2
-            arrow_y = border_width // 3
-            
-            # North arrow
-            polyline = SubElement(svg, 'polyline')
-            polyline.set('points', f"{center_x-5},{arrow_y+8} {center_x},{arrow_y} {center_x+5},{arrow_y+8}")
-            polyline.set('stroke', self.colors['roads'])
-            polyline.set('stroke-width', '1.5')
-            polyline.set('fill', 'none')
-            polyline.set('opacity', '0.4')
+            line2.set('opacity', '0.4')
 
     def add_subtle_grid(self, svg, width, height, border_width, opacity=0.06):
         """Add grid optimized for door format"""
@@ -303,20 +333,28 @@ class MapArtGenerator:
         
         corner_size = random.randint(20, 35)
         
-        # Top corners (more prominent for door format)
-        for side in [0, 1]:  # Left and right
+        # Top-left corner (compass is in top-right content area, so this is fine)
+        polyline = SubElement(svg, 'polyline')
+        polyline.set('points', f"{content_x},{content_y + corner_size} {content_x},{content_y} {content_x + corner_size},{content_y}")
+        polyline.set('stroke', self.colors['roads'])
+        polyline.set('stroke-width', '2')
+        polyline.set('fill', 'none')
+        polyline.set('opacity', '0.7')
+
+        # Bottom corners
+        for side in [0, 1]:
             x_pos = content_x if side == 0 else content_x + content_width
             corner_x = corner_size if side == 0 else -corner_size
             
             polyline = SubElement(svg, 'polyline')
-            polyline.set('points', f"{x_pos},{content_y + corner_size} {x_pos},{content_y} {x_pos + corner_x},{content_y}")
+            polyline.set('points', f"{x_pos},{content_y + content_height - corner_size} {x_pos},{content_y + content_height} {x_pos + corner_x},{content_y + content_height}")
             polyline.set('stroke', self.colors['roads'])
             polyline.set('stroke-width', '2')
             polyline.set('fill', 'none')
             polyline.set('opacity', '0.7')
 
-    def create_svg_panel(self, location_name, width=600, height=1350, border_width=50, variation=0, meters_per_pixel=8):
-        """Generate door-shaped SVG panel with north pointing up"""
+    def create_svg_panel(self, location_name, compass_svg, width=600, height=1350, border_width=50, variation=0, meters_per_pixel=8):
+        """Generate door-shaped SVG panel with compass inside content area"""
         if location_name not in self.locations:
             print(f"  Warning: Location {location_name} not found")
             return None
@@ -334,7 +372,6 @@ class MapArtGenerator:
         aspect_ratio = width / height
         print(f"  Door panel: {total_width}×{total_height}px (aspect: {aspect_ratio:.2f})")
         print(f"  Content: {content_width}×{content_height}px, border: {border_width}px")
-        print(f"  North ↑ pointing to top of door")
         
         # Add variation to center point
         random.seed(hash(location_name + str(variation)))
@@ -396,7 +433,7 @@ class MapArtGenerator:
                     polyline = SubElement(svg, 'polyline')
                     polyline.set('points', ' '.join(points))
                     polyline.set('stroke', self.colors['contours'])
-                    polyline.set('stroke-width', str(random.uniform(0.8, 1.5)))  # Slightly thinner for narrow format
+                    polyline.set('stroke-width', str(random.uniform(0.8, 1.5)))
                     polyline.set('fill', 'none')
                     polyline.set('opacity', '0.8')
                     polyline.set('stroke-linecap', 'round')
@@ -415,7 +452,7 @@ class MapArtGenerator:
                 polyline = SubElement(svg, 'polyline')
                 polyline.set('points', ' '.join(svg_points))
                 polyline.set('stroke', self.colors['contours'])
-                polyline.set('stroke-width', str(random.uniform(0.5, 1.0)))  # Thinner for door format
+                polyline.set('stroke-width', str(random.uniform(0.5, 1.0)))
                 polyline.set('fill', 'none')
                 polyline.set('opacity', str(contour['opacity']))
                 polyline.set('stroke-linecap', 'round')
@@ -462,8 +499,8 @@ class MapArtGenerator:
         
         print(f"  Added {road_count} roads and {contour_count} contours")
         
-        # Add border design elements
-        self.add_border_design(svg, total_width, total_height, border_width)
+        # Add border design elements with compass INSIDE content area
+        self.add_border_design(svg, total_width, total_height, border_width, compass_svg)
         
         # Add decorative overlays optimized for door format
         if variation % 3 == 0:
@@ -475,19 +512,27 @@ class MapArtGenerator:
         return svg
 
     def generate_panels(self, count=8, width=600, height=1350, border_width=50, meters_per_pixel=8):
-        """Generate door-shaped panels"""
+        """Generate door-shaped panels with compass inside content area"""
         panels = []
         locations = list(self.locations.keys())
+        
+        # Load compass SVG once
+        print("Loading compass SVG...")
+        compass_svg = self.load_compass_svg("cpm-lab-nmu.svg")
+        if compass_svg is not None:
+            print("✓ Compass SVG loaded successfully")
+        else:
+            print("⚠ Compass SVG not found - panels will be generated without compass")
         
         total_width = width + (2 * border_width)
         total_height = height + (2 * border_width)
         aspect_ratio = width / height
         
-        print(f"Generating {count} door-shaped panels...")
+        print(f"\nGenerating {count} door-shaped panels with compass INSIDE content area...")
         print(f"🚪 Door format: {total_width}×{total_height}px (aspect ratio: {aspect_ratio:.2f})")
         print(f"📐 Content area: {width}×{height}px")
         print(f"🛡️  Border width: {border_width}px")
-        print(f"🧭 North orientation: ↑ (toward top of door)")
+        print(f"🧭 Compass: INSIDE content area, top-right corner ({border_width*0.8:.0f}×{border_width*0.8:.0f}px)")
         print(f"📍 Coverage per panel: {width*meters_per_pixel}m × {height*meters_per_pixel}m")
         print(f"🏘️  Locations: {', '.join([loc.replace('_', ' ').title() for loc in locations])}")
         print("-" * 60)
@@ -498,29 +543,29 @@ class MapArtGenerator:
             
             print(f"Panel {i+1}/{count}: {location.replace('_', ' ').title()} (variation {variation})")
             
-            svg = self.create_svg_panel(location, width, height, border_width, variation, meters_per_pixel)
+            svg = self.create_svg_panel(location, compass_svg, width, height, border_width, variation, meters_per_pixel)
             if svg is not None:
                 panels.append({
                     'location': location,
                     'variation': variation,
                     'svg': svg
                 })
-                print("  ✓ Door panel generated successfully")
+                print("  ✓ Door panel with compass generated successfully")
             else:
                 print("  ✗ Failed to generate panel")
             print()
         
         return panels
 
-    def save_panels(self, panels, output_dir="door_panels"):
-        """Save door-shaped SVG panels to files"""
+    def save_panels(self, panels, output_dir="door_panels_with_compass"):
+        """Save door-shaped SVG panels with compass to files"""
         os.makedirs(output_dir, exist_ok=True)
         
-        print(f"Saving door panels to '{output_dir}' directory...")
+        print(f"Saving door panels with compass to '{output_dir}' directory...")
         print("-" * 60)
         
         for i, panel in enumerate(panels):
-            filename = f"door_panel_{i+1:02d}_{panel['location']}_v{panel['variation']}.svg"
+            filename = f"door_panel_compass_{i+1:02d}_{panel['location']}_v{panel['variation']}.svg"
             filepath = os.path.join(output_dir, filename)
             
             rough_string = tostring(panel['svg'], 'unicode')
@@ -532,27 +577,27 @@ class MapArtGenerator:
             
             print(f"✓ Saved: {filename}")
         
-        print(f"\n🎉 All {len(panels)} door panels saved successfully!")
+        print(f"\n🎉 All {len(panels)} door panels with compass saved successfully!")
         print(f"📁 Location: {os.path.abspath(output_dir)}")
 
 def main():
     """Main function"""
     print("=" * 70)
-    print("🚗 SELF-DRIVING CAR LAB - DOOR VINYL PANEL GENERATOR")
+    print("🚗 SELF-DRIVING CAR LAB - DOOR PANELS WITH COMPASS")
     print("=" * 70)
-    print("🚪 Door-shaped panels with north orientation ↑")
+    print("🚪 Door-shaped panels with compass INSIDE the content area")
     print(f"Colors: Roads(#FFB81C) | Background(#071B2C) | Contours(#FFFFFF) | Border(#0A2440)")
     print()
     
     generator = MapArtGenerator()
     
     try:
-        # Generate door-shaped panels (roughly 36:80 door aspect ratio)
+        # Generate door-shaped panels with compass inside content area
         panels = generator.generate_panels(
             count=8, 
             width=600,            # Door width (narrow)
-            height=1350,          # Door height (tall) - 36:80 ratio ≈ 0.45
-            border_width=50,      # Safety border
+            height=1350,          # Door height (tall) - 36:80 ratio ≈ 0.44
+            border_width=50,      # Safety border 
             meters_per_pixel=8    # Same detail level
         )
         
@@ -561,17 +606,17 @@ def main():
             print(f"\n📋 SUMMARY:")
             print(f"   🚪 Door panels generated: {len(panels)}")
             print(f"   📐 Size: 700×1450px (600×1350px + 50px borders)")
-            print(f"   🧭 North pointing up ↑")
+            print(f"   🧭 Compass INSIDE content area, top-right corner")
             print(f"   📏 Door aspect ratio: 0.44 (width:height)")
-            print(f"   🎯 Perfect for vinyl door application!")
-            print(f"   ✅ Ready for vinyl printing!")
+            print(f"   🎯 Perfect for lab door vinyl application!")
+            print(f"   ✅ Ready for vinyl printing with compass branding!")
         else:
             print("❌ No panels generated")
             
     except KeyboardInterrupt:
         print("\n⚠️  Generation interrupted")
     except Exception as e:
-        print(f"\n❌ Error: {e}")
+        print(f"❌ Error: {e}")
 
 if __name__ == "__main__":
     main()
